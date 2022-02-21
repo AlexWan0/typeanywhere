@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Type Anywhere</title>
+	<style type="text/css">
+		#content{
+			width: 100%;
+			height: 100%;
+			box-sizing: border-box;
+			border: none;
+			outline: none;
+		}
+		.contentStyle{
+			font-family: monospace;
+			font-size: 20px;
+			tab-size: 4;
+			word-spacing: 0.05em;
+			resize: horizontal;
+		}
+		.contentMini{
+			width: 20vw;
+			border: none;
+			outline: none;
+			position: absolute;
+		}
+		#contentHidden{
+			position: absolute;
+			visibility: hidden;
+			height: auto;
+			width: auto;
+			white-space: nowrap;
+		}
+		html, body{
+			width: 100vw;
+			height: 100vh;
+			padding: 0;
+			margin: 0;
+		}
+		#writingArea{
+			width: 100%;
+			height: 100%;
+		}
+	</style>
+	<script src="https://code.jquery.com/jquery-3.6.0.min.js" integrity="sha256-/xUj+3OJU5yExlq6GSYGSHk7tPXikynS7ogEvDej/m4=" crossorigin="anonymous"></script>
+	<script src="caret-position.js"></script>
+	<script type="text/javascript">
+		function getTextWidth(text) {
+			var ele = document.getElementById("contentHidden");
+			ele.textContent = text;
+			return (ele.clientWidth + 1);
+		}
+
+		function auto_grow(element) {
+			element.style.height = "5px";
+			element.style.height = (element.scrollHeight)+"px";
+		}
+
+		var miniIdMax = 0; // valid ids < miniIdMax
+
+		$(function(){
+			$("#content").focus();
+
+			$("#content").val("\n".repeat(100));
+			$("#content").scrollTop(0);
+
+			$("#content").on("click", function(event){
+				var taElement = document.getElementById("content");
+
+				var caretPos = taElement.selectionStart;
+				var textAreaTxt = $("#content").val();
+
+				var rows = (textAreaTxt.substring(0, caretPos).match(/\n/g) || []).length;
+
+				console.log("rows: " + rows);
+
+				var textAreaSplit = textAreaTxt.split("\n");
+				var rowText = textAreaSplit[rows];
+
+				const rowWidth = getTextWidth(rowText);
+				
+				console.log("rowWidth: " + rowWidth);
+				console.log("pageX: " + event.pageX);
+
+				if(event.pageX > 100 && event.pageX > rowWidth){
+					event.preventDefault();
+
+					var coordinates = getCaretCoordinates(taElement, taElement.selectionEnd, { debug: true });
+
+					console.log("outside text");
+
+					$("#writingArea").append("<textarea id=\"mini-" + miniIdMax + "\" class=\"contentMini contentStyle\"></textarea>")
+
+					$newMini = $("#mini-" + miniIdMax);
+
+					$newMini.css("top", coordinates.top);
+					$newMini.css("left", event.pageX);
+					$newMini.focus();
+					$newMini.attr("oninput", "auto_grow(this)");
+
+					$newMini.focusout(function(){
+						if($newMini.val() === ""){
+							$newMini.remove();
+						}
+					});
+
+					miniIdMax++;
+				}
+			});
+		})
+		
+		$(document).on("keydown", function(event) {
+			if (event.keyCode == 9) {
+				event.preventDefault();
+
+				var caretPos = document.getElementById("content").selectionStart;
+				var caretEnd = document.getElementById("content").selectionEnd;
+				var textAreaTxt = $("#content").val();
+				var txtToAdd = "\t";
+				$("#content").val(textAreaTxt.substring(0, caretPos) + txtToAdd + textAreaTxt.substring(caretEnd));
+				$('#content').focus();
+				document.getElementById("content").selectionStart = caretPos + txtToAdd.length;
+				document.getElementById("content").selectionEnd = caretPos + txtToAdd.length;
+			}
+		});
+	</script>
+</head>
+<body>
+	<div id="writingArea">
+		<textarea id="content" class="contentStyle"></textarea>
+		<div id="contentHidden" class="contentStyle"></div>
+	</div>
+</body>
+</html>
