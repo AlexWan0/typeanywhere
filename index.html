@@ -6,11 +6,8 @@
 	<title>Type Anywhere</title>
 	<style type="text/css">
 		#content{
-			width: 100%;
-			height: 100%;
 			box-sizing: border-box;
-			border: none;
-			outline: none;
+			float: left;
 		}
 		.contentStyle{
 			font-family: monospace;
@@ -20,19 +17,12 @@
 			background: transparent;
 			color: #F5F2E7;
 			line-height: 16px;
+			border: solid;
+			outline: solid;
+			border-color: red;
 		}
 		.contentMini{
 			width: 20vw;
-			border: none;
-			outline: none;
-			position: absolute;
-		}
-		#contentHidden{
-			position: absolute;
-			visibility: hidden;
-			height: auto;
-			width: auto;
-			white-space: nowrap;
 		}
 		html, body{
 			width: 100vw;
@@ -42,19 +32,11 @@
 			background-color: #2C3333;
 		}
 		#writingArea{
-			width: 100%;
 			height: 100%;
 		}
 	</style>
 	<script src="https://code.jquery.com/jquery-3.6.0.min.js" integrity="sha256-/xUj+3OJU5yExlq6GSYGSHk7tPXikynS7ogEvDej/m4=" crossorigin="anonymous"></script>
-	<script src="caret-position.js"></script>
 	<script type="text/javascript">
-		function getTextWidth(text) {
-			var ele = document.getElementById("contentHidden");
-			ele.textContent = text;
-			return (ele.clientWidth + 1);
-		}
-
 		function auto_grow(element) {
 			element.style.height = "5px";
 			element.style.height = (element.scrollHeight)+"px";
@@ -64,68 +46,99 @@
 
 		var maxId = 0;
 
+		function handleClick(event){
+			var taElement = document.getElementById("content");
+			if(event.metaKey){
+				event.preventDefault();
+
+				var row = Math.floor((event.pageY - 10)/16);
+				var top = row * 16 + 5;
+
+				$prevEle = $("#content");
+				var prevBottom = 10;
+				
+				for (const [key, value] of Object.entries(minis)) {
+					$ele = value["ele"];
+					var eleBottom = $ele.position().top + $ele.offset().top + $ele.outerHeight(true);
+
+					if(eleBottom > prevBottom && eleBottom <= top){
+						$prevEle = $ele;
+						prevBottom = eleBottom;
+					}
+				}
+
+				for (const [key, value] of Object.entries(minis)) {
+					$ele = value["ele"];
+					var eleTop = $ele.offset().top;
+
+					console.log("eleTop: " + eleTop);
+					console.log(top);
+
+					if(eleTop > top){
+						var newMargin = parseInt($ele.css("margin-top").slice(0, -2)) - (top - prevBottom);
+						$ele.css("margin-top", newMargin);
+						console.log(newMargin);
+					}
+				}
+
+				$prevEle.after("<div contenteditable=\"true\" spellcheck=\"false\" id=\"mini-" + maxId + "\" class=\"contentMini contentStyle\"></div>");
+
+				$newMini = $("#mini-" + maxId);
+
+				$newMini.data("id", maxId);
+
+				var miniLeft = Math.floor(100 * (event.pageX/window.innerWidth));
+
+				$newMini.attr("style",
+					"margin-top: " + (top - prevBottom) + "px; \
+					margin-left: " + miniLeft + "vw;");
+
+				$newMini.focus();
+				$newMini.attr("oninput", "auto_grow(this)");
+
+				$newMini.focusout(function(){
+					if($(this).text() === ""){
+						var miniId = $(this).data("id");
+
+						$(this).remove();
+						delete minis[miniId];
+					}
+				});
+
+				$newMini.on("keydown", function(event){
+					if(event.keyCode == 8 && $(this).text() === ""){
+						var miniId = $(this).data("id");
+						
+						console.log(miniId);
+
+						var row = minis[miniId]["row"];
+
+						document.getElementById("content").selectionStart = $("#content").text().split("\n").slice(0, row + 1).join("\n").length;
+						$("#content").focus();
+
+						$(this).remove();
+						delete minis[miniId];
+					}
+				});
+
+				$newMini.on("click", handleClick);
+
+				minis[maxId] = {
+					"ele": $newMini,
+					"row": row
+				};
+
+				maxId++;
+			}
+		}
+
 		$(function(){
 			$("#content").focus();
 
 			document.getElementById("content").selectionStart = 0;
 			document.getElementById("content").selectionEnd = 0;
 
-			$("#content").on("click", function(event){
-				var taElement = document.getElementById("content");
-
-				if(event.metaKey){
-					event.preventDefault();
-
-					$("#writingArea").append("<textarea spellcheck=\"false\" id=\"mini-" + maxId + "\" class=\"contentMini contentStyle\"></textarea>");
-
-					$newMini = $("#mini-" + maxId);
-
-					$newMini.data("id", maxId);
-
-					var miniLeft = Math.floor(100 * (event.pageX/window.innerWidth));
-					var row = Math.floor((event.pageY - 10)/16);
-
-					$newMini.attr("style",
-						"top: " + (row * 16 + 5) + "px; \
-						left: " + miniLeft + "vw; \
-						width: " + (100 - miniLeft) + "vw;");
-
-					$newMini.focus();
-					$newMini.attr("oninput", "auto_grow(this)");
-
-					$newMini.focusout(function(){
-						if($(this).val() === ""){
-							var miniId = $(this).data("id");
-
-							$(this).remove();
-							delete minis[miniId];
-						}
-					});
-
-					$newMini.on("keydown", function(event){
-						if(event.keyCode == 8 && $(this).val() === ""){
-							var miniId = $(this).data("id");
-							
-							console.log(miniId);
-
-							var row = minis[miniId]["row"];
-
-							document.getElementById("content").selectionStart = $("#content").val().split("\n").slice(0, row + 1).join("\n").length;
-							$("#content").focus();
-
-							$(this).remove();
-							delete minis[miniId];
-						}
-					});
-
-					minis[maxId] = {
-						"ele": $newMini,
-						"row": row
-					};
-
-					maxId++;
-				}
-			});
+			$(document).on("click", handleClick);
 		})
 		
 		$(document).on("keydown", function(event){
@@ -134,9 +147,9 @@
 
 				var caretPos = document.getElementById("content").selectionStart;
 				var caretEnd = document.getElementById("content").selectionEnd;
-				var textAreaTxt = $("#content").val();
+				var textAreaTxt = $("#content").text();
 				var txtToAdd = "\t";
-				$("#content").val(textAreaTxt.substring(0, caretPos) + txtToAdd + textAreaTxt.substring(caretEnd));
+				$("#content").text(textAreaTxt.substring(0, caretPos) + txtToAdd + textAreaTxt.substring(caretEnd));
 				$('#content').focus();
 				document.getElementById("content").selectionStart = caretPos + txtToAdd.length;
 				document.getElementById("content").selectionEnd = caretPos + txtToAdd.length;
@@ -146,8 +159,7 @@
 </head>
 <body>
 	<div id="writingArea">
-		<textarea spellcheck="false" id="content" class="contentStyle"></textarea>
-		<div id="contentHidden" class="contentStyle"></div>
+		<div contenteditable="true" spellcheck="false" id="content" class="contentStyle"></div>
 	</div>
 </body>
 </html>
