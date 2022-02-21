@@ -14,10 +14,12 @@
 		}
 		.contentStyle{
 			font-family: monospace;
-			font-size: 20px;
+			font-size: 16px;
 			tab-size: 4;
 			word-spacing: 0.05em;
-			resize: horizontal;
+			background: transparent;
+			color: #F5F2E7;
+			line-height: 16px;
 		}
 		.contentMini{
 			width: 20vw;
@@ -35,8 +37,9 @@
 		html, body{
 			width: 100vw;
 			height: 100vh;
-			padding: 0;
+			padding: 10px 0 0 10px;
 			margin: 0;
+			background-color: #2C3333;
 		}
 		#writingArea{
 			width: 100%;
@@ -57,61 +60,76 @@
 			element.style.height = (element.scrollHeight)+"px";
 		}
 
-		var miniIdMax = 0; // valid ids < miniIdMax
+		var minis = {};
+
+		var maxId = 0;
 
 		$(function(){
 			$("#content").focus();
 
-			$("#content").val("\n".repeat(100));
-			$("#content").scrollTop(0);
+			document.getElementById("content").selectionStart = 0;
+			document.getElementById("content").selectionEnd = 0;
 
 			$("#content").on("click", function(event){
 				var taElement = document.getElementById("content");
 
-				var caretPos = taElement.selectionStart;
-				var textAreaTxt = $("#content").val();
-
-				var rows = (textAreaTxt.substring(0, caretPos).match(/\n/g) || []).length;
-
-				console.log("rows: " + rows);
-
-				var textAreaSplit = textAreaTxt.split("\n");
-				var rowText = textAreaSplit[rows];
-
-				const rowWidth = getTextWidth(rowText);
-				
-				console.log("rowWidth: " + rowWidth);
-				console.log("pageX: " + event.pageX);
-
-				if(event.pageX > 100 && event.pageX > rowWidth){
+				if(event.metaKey){
 					event.preventDefault();
 
-					var coordinates = getCaretCoordinates(taElement, taElement.selectionEnd, { debug: true });
+					$("#writingArea").append("<textarea spellcheck=\"false\" id=\"mini-" + maxId + "\" class=\"contentMini contentStyle\"></textarea>");
 
-					console.log("outside text");
+					$newMini = $("#mini-" + maxId);
 
-					$("#writingArea").append("<textarea id=\"mini-" + miniIdMax + "\" class=\"contentMini contentStyle\"></textarea>")
+					$newMini.data("id", maxId);
 
-					$newMini = $("#mini-" + miniIdMax);
+					var miniLeft = Math.floor(100 * (event.pageX/window.innerWidth));
+					var row = Math.floor((event.pageY - 10)/16);
 
-					$newMini.css("top", coordinates.top);
-					$newMini.css("left", event.pageX);
+					$newMini.attr("style",
+						"top: " + (row * 16 + 5) + "px; \
+						left: " + miniLeft + "vw; \
+						width: " + (100 - miniLeft) + "vw;");
+
 					$newMini.focus();
 					$newMini.attr("oninput", "auto_grow(this)");
 
 					$newMini.focusout(function(){
-						if($newMini.val() === ""){
-							$newMini.remove();
+						if($(this).val() === ""){
+							var miniId = $(this).data("id");
+
+							$(this).remove();
+							delete minis[miniId];
 						}
 					});
 
-					miniIdMax++;
+					$newMini.on("keydown", function(event){
+						if(event.keyCode == 8 && $(this).val() === ""){
+							var miniId = $(this).data("id");
+							
+							console.log(miniId);
+
+							var row = minis[miniId]["row"];
+
+							document.getElementById("content").selectionStart = $("#content").val().split("\n").slice(0, row + 1).join("\n").length;
+							$("#content").focus();
+
+							$(this).remove();
+							delete minis[miniId];
+						}
+					});
+
+					minis[maxId] = {
+						"ele": $newMini,
+						"row": row
+					};
+
+					maxId++;
 				}
 			});
 		})
 		
-		$(document).on("keydown", function(event) {
-			if (event.keyCode == 9) {
+		$(document).on("keydown", function(event){
+			if(event.keyCode == 9){
 				event.preventDefault();
 
 				var caretPos = document.getElementById("content").selectionStart;
@@ -128,7 +146,7 @@
 </head>
 <body>
 	<div id="writingArea">
-		<textarea id="content" class="contentStyle"></textarea>
+		<textarea spellcheck="false" id="content" class="contentStyle"></textarea>
 		<div id="contentHidden" class="contentStyle"></div>
 	</div>
 </body>
