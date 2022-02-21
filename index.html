@@ -70,7 +70,7 @@
 			document.getElementById("content").selectionStart = 0;
 			document.getElementById("content").selectionEnd = 0;
 
-			$("#content").on("click", function(event){
+			$(document).on("click", function(event){
 				var taElement = document.getElementById("content");
 
 				if(event.metaKey){
