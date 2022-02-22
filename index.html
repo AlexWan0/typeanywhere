@@ -47,7 +47,7 @@
 		}
 	</style>
 	<script src="https://code.jquery.com/jquery-3.6.0.min.js" integrity="sha256-/xUj+3OJU5yExlq6GSYGSHk7tPXikynS7ogEvDej/m4=" crossorigin="anonymous"></script>
-	<script src="caret-position.js"></script>
+	<script src="https://unpkg.com/hotkeys-js/dist/hotkeys.min.js"></script>
 	<script type="text/javascript">
 		function getTextWidth(text) {
 			var ele = document.getElementById("contentHidden");
@@ -60,86 +60,228 @@
 			element.style.height = (element.scrollHeight)+"px";
 		}
 
+		var lastFocused0 = undefined;
+		var lastFocused1 = undefined;
+
+		function setLastFocusedElement(elem){
+			lastFocused0 = lastFocused1;
+			lastFocused1 = elem;
+		}
+
 		var minis = {};
 
-		var maxId = 0;
+		var maxId = 1;
+
+		var outInfo = {'id': 0, 'selectionStart': 0};
+
+		function focusOutTracker(domId, id){
+			outInfo['id'] = id;
+			outInfo['selectionStart'] = document.getElementById(domId).selectionStart;
+		}
+
+		function getRow(text, caretPos){
+			// this is a bad way of getting which row we're on lol
+			// continually track it and add it to focusOutTracker and outInfo instead?
+			var split = text.split("\n");
+			var counter = split[0].length;
+			var idx = 0;
+			do{
+				idx++;
+
+				if(idx >= split.length){
+					break;
+				}
+				counter += split[idx].length + 1;
+			}while(counter <= caretPos);
+
+			return [idx - 1, split[idx - 1]];
+		}
+
+		function addArrow(text, row){
+			var split = text.split("\n");
+
+			var idx = row + 1;
+
+			var result = split.slice(0, idx).join("\n");
+
+			result += ' -->'
+
+			if(idx < split.length){
+				result += "\n" + split[idx]
+			}
+
+			if(idx + 1 < split.length){
+				result += "\n" + split.slice(idx + 1).join("\n");
+			}
+
+			return result;
+		}
+
+		function createMiniAtPosition(left, row){
+			var taElement = document.getElementById("content");
+
+			$("#writingArea").append("<textarea spellcheck=\"false\" id=\"mini-" + maxId + "\" class=\"contentMini contentStyle\"></textarea>");
+
+			$newMini = $("#mini-" + maxId);
+
+			$newMini.data("id", maxId);
+
+			$newMini.attr("style",
+				"top: " + (row * 16 + 5) + "px; \
+				left: " + left + "vw; \
+				width: " + (100 - left) + "vw;");
+
+			$newMini.focus(function(){
+				setLastFocusedElement($(this));
+			});
+
+			$newMini.focus();
+			$newMini.attr("oninput", "auto_grow(this)");
+
+			$newMini.focusout(function(){
+				if($(this).val() === ""){
+					var miniId = $(this).data("id");
+
+					$(this).remove();
+					delete minis[miniId];
+				}
+			});
+
+			$newMini.on("keydown", function(event){
+				var miniId = $(this).data("id");
+				if(event.keyCode == 8 && $(this).val() === ""){							
+					console.log(miniId);
+
+					var parent = minis[miniId]["parent"];
+
+					console.log(parent);
+
+					var row = parent["row"];
+
+					delete parent["obj"]["tracked_rows"][row];
+
+					var parentDomId = $(parent["obj"]["ele"]).attr("id");
+
+					document.getElementById(parentDomId).selectionStart = $("#content").val().split("\n").slice(0, row + 1).join("\n").length;
+					$(parent["obj"]["ele"]).focus();
+
+					$(this).remove();
+					delete minis[miniId];
+				}else{
+					focusOutTracker("mini-" + miniId, miniId);
+				}
+			});
+
+			minis[maxId] = {
+				"ele": $newMini,
+				"tracked_rows": {},
+				"left": left
+			};
+
+			maxId++;
+
+			return minis[maxId - 1];
+		}
+
+		hotkeys.filter = function(event){
+		  return true;
+		}
+
+		hotkeys('ctrl+q', function(){
+			var parentId = outInfo["id"];
+			var parentEle = $(minis[parentId]["ele"]);
+
+			console.log(parentEle);
+
+			var text = $(event.target).val();
+
+			var rowInfo = getRow(text, document.getElementById($(event.target).attr("id")).selectionStart);
+			
+			var row = rowInfo[0];
+
+			var arrowText = addArrow(text, row);
+
+			$(parentEle).val(arrowText);
+			
+			var miniLeft = minis[parentId]["left"] + Math.floor(100 * (rowInfo[1].length * 16/window.innerWidth)) + 5;
+
+			var childMini = createMiniAtPosition(miniLeft, row + 1);
+
+			minis[parentId]["tracked_rows"][row] = childMini;
+
+			childMini["parent"] = {"row": row, "obj": minis[parentId]};
+		})
 
 		$(function(){
+			$("#content").focus(function(){
+				setLastFocusedElement($(this));
+			});
+
 			$("#content").focus();
 
 			document.getElementById("content").selectionStart = 0;
 			document.getElementById("content").selectionEnd = 0;
 
-			$(document).on("click", function(event){
-				var taElement = document.getElementById("content");
+			$("#content").keydown(function(){
+				focusOutTracker("content", 0);
+			});
 
-				if(event.metaKey){
+			minis[0] = {
+				"ele": $("#content"),
+				"tracked_rows": [],
+				"left": 0
+			}
+
+			$(document).on("mousedown", function(event){
+				if(event.metaKey && event.shiftKey){
 					event.preventDefault();
 
-					$("#writingArea").append("<textarea spellcheck=\"false\" id=\"mini-" + maxId + "\" class=\"contentMini contentStyle\"></textarea>");
+					console.log(outInfo);
+					
+					prevEle = $(minis[outInfo["id"]]["ele"]);
 
-					$newMini = $("#mini-" + maxId);
+					console.log(prevEle.val());
 
-					$newMini.data("id", maxId);
+					var text = $(prevEle).val();
+
+					var arrowRow = getRow(text, outInfo["selectionStart"])[0];
+					var arrowText = addArrow(text, arrowRow);
+
+					$(prevEle).val(arrowText);
+
+					minis[outInfo["id"]]["tracked_rows"].push(arrowRow);
 
 					var miniLeft = Math.floor(100 * (event.pageX/window.innerWidth));
 					var row = Math.floor((event.pageY - 10)/16);
 
-					$newMini.attr("style",
-						"top: " + (row * 16 + 5) + "px; \
-						left: " + miniLeft + "vw; \
-						width: " + (100 - miniLeft) + "vw;");
+					createMiniAtPosition(miniLeft, row);
+				}else if(event.metaKey){
+					event.preventDefault();
 
-					$newMini.focus();
-					$newMini.attr("oninput", "auto_grow(this)");
+					var miniLeft = Math.floor(100 * (event.pageX/window.innerWidth));
+					var row = Math.floor((event.pageY - 10)/16);
 
-					$newMini.focusout(function(){
-						if($(this).val() === ""){
-							var miniId = $(this).data("id");
-
-							$(this).remove();
-							delete minis[miniId];
-						}
-					});
-
-					$newMini.on("keydown", function(event){
-						if(event.keyCode == 8 && $(this).val() === ""){
-							var miniId = $(this).data("id");
-							
-							console.log(miniId);
-
-							var row = minis[miniId]["row"];
-
-							document.getElementById("content").selectionStart = $("#content").val().split("\n").slice(0, row + 1).join("\n").length;
-							$("#content").focus();
-
-							$(this).remove();
-							delete minis[miniId];
-						}
-					});
-
-					minis[maxId] = {
-						"ele": $newMini,
-						"row": row
-					};
-
-					maxId++;
+					createMiniAtPosition(miniLeft, row);
 				}
 			});
 		})
-		
+
 		$(document).on("keydown", function(event){
 			if(event.keyCode == 9){
 				event.preventDefault();
 
-				var caretPos = document.getElementById("content").selectionStart;
-				var caretEnd = document.getElementById("content").selectionEnd;
-				var textAreaTxt = $("#content").val();
+				var activeEle = document.activeElement;
+
+				var caretPos = activeEle.selectionStart;
+				var caretEnd = activeEle.selectionEnd;
+
+				var textAreaTxt = $(activeEle).val();
+
 				var txtToAdd = "\t";
-				$("#content").val(textAreaTxt.substring(0, caretPos) + txtToAdd + textAreaTxt.substring(caretEnd));
-				$('#content').focus();
-				document.getElementById("content").selectionStart = caretPos + txtToAdd.length;
-				document.getElementById("content").selectionEnd = caretPos + txtToAdd.length;
+				$(activeEle).val(textAreaTxt.substring(0, caretPos) + txtToAdd + textAreaTxt.substring(caretEnd));
+				$(activeEle).focus();
+				activeEle.selectionStart = caretPos + txtToAdd.length;
+				activeEle.selectionEnd = caretPos + txtToAdd.length;
 			}
 		});
 	</script>
